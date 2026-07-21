@@ -3,8 +3,8 @@
 	"name": "TraceTime",
 	"version": "0.1.0",
 	"minAppVersion": "1.5.0",
-	"description": "Time tracking for Obsidian.",
-	"author": "smallraw",
-	"authorUrl": "",
+	"description": "Show when each block of a note was last edited.",
+	"author": "QuincySx",
+	"authorUrl": "https://github.com/QuincySx",
 	"isDesktopOnly": false
 }
