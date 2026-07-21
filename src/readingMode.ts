@@ -1,0 +1,55 @@
+import { MarkdownPostProcessorContext } from "obsidian";
+import { BlockType } from "./blocks";
+import { formatTimestamp } from "./format";
+import type { Tracker } from "./tracker";
+import type { TraceTimeSettings } from "./settings";
+
+function lineOf(lineStarts: number[], offset: number): number {
+	let lo = 0;
+	let hi = lineStarts.length;
+	while (lo < hi) {
+		const mid = (lo + hi) >> 1;
+		if (lineStarts[mid] <= offset) lo = mid + 1;
+		else hi = mid;
+	}
+	return lo - 1;
+}
+
+/**
+ * 阅读模式显示：每个 section 一个 overlay 浮层，时间标签绝对定位，
+ * 不侵入正文 DOM。块与渲染元素的对应是近似匹配（按顺序配对
+ * section 行范围内的块与顶层子元素），对常规文档足够准确。
+ */
+export function createReadingPostProcessor(tracker: Tracker, getSettings: () => TraceTimeSettings) {
+	return (el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
+		const st = tracker.getState(ctx.sourcePath);
+		if (!st) return;
+		const info = ctx.getSectionInfo(el);
+		if (!info) return;
+		const lineStarts = tracker.getLineStarts(st);
+		if (!lineStarts) return;
+
+		const blocks = st.index.blocks.filter((b) => {
+			if (b.type === BlockType.Frontmatter) return false;
+			const line = lineOf(lineStarts, b.from);
+			return line >= info.lineStart && line <= info.lineEnd;
+		});
+		if (blocks.length === 0) return;
+
+		el.style.position = "relative";
+		const overlay = el.createDiv({ cls: "tracetime-overlay" });
+		const elRect = el.getBoundingClientRect();
+
+		const children = Array.from(el.children).filter(
+			(c): c is HTMLElement => c instanceof HTMLElement && c !== overlay
+		);
+		let bi = 0;
+		for (const child of children) {
+			if (bi >= blocks.length) break;
+			const b = blocks[bi++];
+			const label = overlay.createDiv({ cls: "tracetime-overlay-label" });
+			label.textContent = formatTimestamp(b.modifiedAt, getSettings());
+			label.style.top = `${child.getBoundingClientRect().top - elRect.top}px`;
+		}
+	};
+}

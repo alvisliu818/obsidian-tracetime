@@ -1,0 +1,86 @@
+/* TraceTime plugin styles */
+
+/* 编辑模式：overlay 挂在 .cm-scroller 内，用文档坐标定位，
+   滚动由浏览器原生处理，标签始终跟随内容。
+   scroller 需要成为定位基准（插件卸载时样式一并移除）。 */
+.markdown-source-view .cm-scroller {
+	position: relative;
+}
+
+.tracetime-editor-overlay {
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 0;
+	height: 0;
+	overflow: visible;
+	pointer-events: none;
+}
+
+.tracetime-editor-label {
+	position: absolute;
+	transform: translateY(-50%);
+	padding-left: 0.5em;
+	white-space: nowrap;
+	font-size: var(--font-text-size);
+	font-family: var(--font-text);
+	font-weight: normal;
+	font-style: normal;
+	line-height: normal;
+	color: var(--text-faint);
+	pointer-events: none;
+}
+
+/* 阅读模式：统一 overlay 浮层，不参与正文布局；
+   不做 paint contain，标签才能画在浮层（= 文档区）右边界之外 */
+.tracetime-overlay {
+	position: absolute;
+	inset: 0;
+	overflow: visible;
+	pointer-events: none;
+	contain: layout style;
+}
+
+.tracetime-overlay-label {
+	position: absolute;
+	left: 100%;
+	padding-left: 0.5em;
+	white-space: nowrap;
+	font-size: var(--font-text-size);
+	font-family: var(--font-text);
+	font-weight: normal;
+	font-style: normal;
+	line-height: normal;
+	color: var(--text-faint);
+	pointer-events: none;
+}
+
+/* 设置页：实时预览区 */
+.tracetime-settings-preview {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	padding: 8px 14px;
+	margin-bottom: 16px;
+}
+
+.tracetime-preview-title {
+	font-weight: 600;
+	margin-bottom: 6px;
+	color: var(--text-muted);
+}
+
+.tracetime-preview-row {
+	display: flex;
+	justify-content: space-between;
+	padding: 2px 0;
+	font-size: var(--font-ui-small);
+}
+
+.tracetime-preview-sample {
+	color: var(--text-muted);
+}
+
+.tracetime-preview-result {
+	color: var(--text-accent);
+	font-variant-numeric: tabular-nums;
+}
