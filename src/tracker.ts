@@ -331,7 +331,7 @@ export class Tracker {
 	}
 
 	/** 落盘：只写脏文件，同一文件的连续写入由防抖合并。 */
-	async flushDirty(): Promise<void> {
+	flushDirty(): void {
 		if (this.flushTimer !== null) {
 			window.clearTimeout(this.flushTimer);
 			this.flushTimer = null;
