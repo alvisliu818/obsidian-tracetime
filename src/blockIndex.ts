@@ -31,7 +31,9 @@ export function seedHistory(
 		}
 	}
 	while (history.size > HISTORY_CAP) {
-		history.delete(history.keys().next().value!);
+		const oldest = history.keys().next();
+		if (oldest.done) break;
+		history.delete(oldest.value);
 	}
 }
 

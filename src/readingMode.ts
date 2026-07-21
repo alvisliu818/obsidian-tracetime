@@ -36,12 +36,12 @@ export function createReadingPostProcessor(tracker: Tracker, getSettings: () => 
 		});
 		if (blocks.length === 0) return;
 
-		el.style.position = "relative";
+		el.addClass("tracetime-section");
 		const overlay = el.createDiv({ cls: "tracetime-overlay" });
 		const elRect = el.getBoundingClientRect();
 
 		const children = Array.from(el.children).filter(
-			(c): c is HTMLElement => c instanceof HTMLElement && c !== overlay
+			(c): c is HTMLElement => c.instanceOf(HTMLElement) && c !== overlay
 		);
 		let bi = 0;
 		for (const child of children) {

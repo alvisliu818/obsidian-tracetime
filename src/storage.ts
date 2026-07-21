@@ -62,9 +62,8 @@ export class Storage {
 				await this.app.vault.adapter.writeBinary(bak, prev);
 			}
 			const u8 = encode(record);
-			const buf = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength) as ArrayBuffer;
+			const buf = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength);
 			await this.app.vault.adapter.writeBinary(p, buf);
-			console.log(`TraceTime: wrote record for ${path} (${u8.length} bytes)`);
 		});
 	}
 
@@ -87,13 +86,13 @@ export class Storage {
 				if (record) {
 					record.path = newPath;
 					const u8 = encode(record);
-					const buf = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength) as ArrayBuffer;
+					const buf = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength);
 					await this.app.vault.adapter.writeBinary(this.recordPath(newPath), buf);
 				}
 				if (backup) {
 					backup.path = newPath;
 					const u8 = encode(backup);
-					const buf = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength) as ArrayBuffer;
+					const buf = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength);
 					await this.app.vault.adapter.writeBinary(this.backupPath(newPath), buf);
 				}
 			});

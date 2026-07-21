@@ -33,6 +33,10 @@
 
 /* 阅读模式：统一 overlay 浮层，不参与正文布局；
    不做 paint contain，标签才能画在浮层（= 文档区）右边界之外 */
+.tracetime-section {
+	position: relative;
+}
+
 .tracetime-overlay {
 	position: absolute;
 	inset: 0;

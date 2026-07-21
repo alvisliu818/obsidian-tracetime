@@ -37,8 +37,7 @@ export function createEditorExtension(tracker: Tracker, getSettings: () => Trace
 			private destroyed = false;
 
 			constructor(view: EditorView) {
-				this.overlay = document.createElement("div");
-				this.overlay.className = "tracetime-editor-overlay";
+				this.overlay = createDiv("tracetime-editor-overlay");
 				view.scrollDOM.appendChild(this.overlay);
 				this.scheduleRender(view);
 			}
@@ -74,8 +73,7 @@ export function createEditorExtension(tracker: Tracker, getSettings: () => Trace
 						if (this.destroyed) return;
 						this.overlay.textContent = "";
 						for (const l of labels) {
-							const label = document.createElement("div");
-							label.className = "tracetime-editor-label";
+							const label = createDiv("tracetime-editor-label");
 							label.textContent = l.text;
 							label.style.left = `${l.left}px`;
 							label.style.top = `${l.top}px`;
