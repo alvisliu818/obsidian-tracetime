@@ -1,5 +1,44 @@
 # TraceTime
 
+TraceTime is an Obsidian plugin that tracks and displays the **last edited time of every block** (paragraph, heading, code block, list, table…) in your notes, with labels aligned to the right of the document area.
+
+## Features
+
+- **Block-level time tracking**: incremental re-parsing via CodeMirror ChangeSets — only blocks near the edit are touched, never a full-document diff
+- **Undo/redo aware**: restoring content with Ctrl+Z restores its original timestamp (content-hash session history)
+- **External change recovery**: timestamps migrate by block hash when files are changed by sync tools or other editors
+- **Configurable display rules**: a ladder of formats (just now → minutes ago → hours ago → today → yesterday → days ago → this year → full date) with a live-preview settings tab
+- **Timestamp rollback**: every write keeps a one-generation backup; restore from the settings tab if timestamps ever get clobbered
+- **Performance first**: millisecond incremental path, viewport-only rendering, debounced batched writes, no full-vault scan on startup
+
+## Data storage
+
+Time data lives in `<vault>/.obsidian/plugins/tracetime/records/`, one MessagePack record per Markdown file. **Note content is never stored** — only block hashes, the first/last 32 normalized characters of each block, and timestamps.
+
+## Installation
+
+### Manual
+
+Copy `main.js`, `manifest.json`, `styles.css` into `<vault>/.obsidian/plugins/tracetime/` and enable the plugin in Settings → Community plugins.
+
+### BRAT
+
+Install the BRAT plugin and add the repository `QuincySx/obsidian-tracetime`.
+
+## Development
+
+```
+npm install
+npm run dev    # watch build
+npm run build  # type check + production build
+npm test       # core logic self-tests
+npm run pack   # package dist/tracetime-<version>.zip
+```
+
+---
+
+# TraceTime（中文）
+
 TraceTime 是一个 Obsidian 插件：为笔记中的**每个块**（段落、标题、代码块、列表、表格……）记录并显示"最后编辑时间"，标签统一显示在文档区右侧。
 
 ## 特性
@@ -14,26 +53,6 @@ TraceTime 是一个 Obsidian 插件：为笔记中的**每个块**（段落、�
 ## 数据存储
 
 时间数据保存在 `<库>/.obsidian/plugins/tracetime/records/`，每个 Markdown 文件一条 MessagePack 记录，**不保存笔记正文**（只存块哈希、前后各 32 个标准化字符和时间戳）。
-
-## 安装
-
-### 手动安装
-
-把 `main.js`、`manifest.json`、`styles.css` 复制到 `<库>/.obsidian/plugins/tracetime/`，在设置 → 第三方插件中启用。
-
-### BRAT
-
-安装 BRAT 插件后添加仓库 `QuincySx/obsidian-tracetime`。
-
-## 开发
-
-```
-npm install
-npm run dev    # watch 构建
-npm run build  # 类型检查 + 生产构建
-npm test       # 核心逻辑自检测试
-npm run pack   # 打包 dist/tracetime-<version>.zip
-```
 
 ## License
 
