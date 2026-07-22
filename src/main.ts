@@ -65,17 +65,20 @@ export default class TraceTimePlugin extends Plugin {
 			const f = this.app.workspace.getActiveFile();
 			if (f && f.extension === "md") void this.tracker.openFile(f);
 		});
+
+		this.applyLabelStyles();
+	}
+
+	/** 把字号等显示层设置应用到 CSS 变量，编辑/阅读两种模式共用。 */
+	applyLabelStyles(): void {
+		document.body.style.setProperty("--tracetime-font-size", `${this.settings.labelFontSize}px`);
 	}
 
 	async saveSettings() {
 		await this.saveData(this.settings);
 		// 设置只影响显示层，刷新两种模式的标签即可
-		this.tracker.refreshEditors();
-		this.app.workspace.iterateAllLeaves((leaf) => {
-			if (leaf.view instanceof MarkdownView) {
-				leaf.view.previewMode.rerender(true);
-			}
-		});
+		this.applyLabelStyles();
+		this.tracker.refreshViews();
 	}
 
 	onunload() {

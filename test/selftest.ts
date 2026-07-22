@@ -164,6 +164,14 @@ check(
 	f(new Date(2025, 6, 19, 8, 5), { ...fmt, dateFormat: "MM/DD HH:mm" }) === "07/19 08:05"
 );
 check(
+	"format: 两位年 + 不补零月日",
+	f(new Date(2025, 6, 9, 8, 5), { ...fmt, dateFormat: "YY年M月D日" }) === "25年7月9日"
+);
+check(
+	"format: 当月第几周",
+	f(new Date(2025, 6, 19, 8, 5), { ...fmt, dateFormat: "M月第W周" }) === "7月第3周"
+);
+check(
 	"format: 关刚刚档后落档",
 	f(new Date(2026, 6, 20, 11, 59), { ...fmt, justNowMinutes: 0 }) === "1 分钟前"
 );

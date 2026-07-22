@@ -13,8 +13,12 @@ export interface TraceTimeSettings {
 	daysAgoLimit: number;
 	/** 档位 7：今年的块显示 MM-DD */
 	thisYearShort: boolean;
-	/** 回退格式：更早的块按此显示，支持 YYYY MM DD HH mm */
+	/** 回退格式：更早的块按此显示，占位符见 renderDateFormat */
 	dateFormat: string;
+	/** 标签字号（px） */
+	labelFontSize: number;
+	/** 紧凑模式：关闭限制行宽时标签收起为圆点，悬停展开 */
+	compactLabels: boolean;
 }
 
 export const DEFAULT_SETTINGS: TraceTimeSettings = {
@@ -26,6 +30,8 @@ export const DEFAULT_SETTINGS: TraceTimeSettings = {
 	daysAgoLimit: 0,
 	thisYearShort: false,
 	dateFormat: "YYYY-MM-DD HH:mm",
+	labelFontSize: 12,
+	compactLabels: true,
 };
 
 export function nowMinutes(): number {
@@ -36,13 +42,24 @@ function pad2(n: number): string {
 	return String(n).padStart(2, "0");
 }
 
-function applyFormat(format: string, d: Date): string {
-	return format
-		.replace(/YYYY/g, String(d.getFullYear()))
-		.replace(/MM/g, pad2(d.getMonth() + 1))
-		.replace(/DD/g, pad2(d.getDate()))
-		.replace(/HH/g, pad2(d.getHours()))
-		.replace(/mm/g, pad2(d.getMinutes()));
+/**
+ * 按格式串渲染日期。占位符：
+ * YYYY=4 位年  YY=2 位年  MM=月  M=月(不补零)  DD=日  D=日(不补零)
+ * HH=时  mm=分  W=当月第几周（1-7 日 = 第 1 周，依此类推）
+ */
+export function renderDateFormat(format: string, d: Date): string {
+	const tokens: Record<string, string> = {
+		YYYY: String(d.getFullYear()),
+		YY: pad2(d.getFullYear() % 100),
+		MM: pad2(d.getMonth() + 1),
+		M: String(d.getMonth() + 1),
+		DD: pad2(d.getDate()),
+		D: String(d.getDate()),
+		HH: pad2(d.getHours()),
+		mm: pad2(d.getMinutes()),
+		W: String(Math.ceil(d.getDate() / 7)),
+	};
+	return format.replace(/YYYY|YY|MM|M|DD|D|HH|mm|W/g, (t) => tokens[t]);
 }
 
 /** 本地日历日序号，用于计算“差几天”（按自然日而不是 24 小时）。 */
@@ -96,9 +113,9 @@ export function formatTimestamp(
 
 	// 7. 今年 MM-DD
 	if (settings.thisYearShort && d.getFullYear() === now.getFullYear()) {
-		return applyFormat("MM-DD", d);
+		return renderDateFormat("MM-DD", d);
 	}
 
 	// 回退：完整日期格式
-	return applyFormat(settings.dateFormat || "YYYY-MM-DD HH:mm", d);
+	return renderDateFormat(settings.dateFormat || "YYYY-MM-DD HH:mm", d);
 }

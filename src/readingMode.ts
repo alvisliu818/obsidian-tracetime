@@ -23,7 +23,11 @@ function lineOf(lineStarts: number[], offset: number): number {
 export function createReadingPostProcessor(tracker: Tracker, getSettings: () => TraceTimeSettings) {
 	return (el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
 		const st = tracker.getState(ctx.sourcePath);
-		if (!st) return;
+		if (!st) {
+			// 状态是异步加载的：触发建索引，完成后由 refreshViews 触发重渲染
+			tracker.ensureFile(ctx.sourcePath);
+			return;
+		}
 		const info = ctx.getSectionInfo(el);
 		if (!info) return;
 		const lineStarts = tracker.getLineStarts(st);
@@ -38,6 +42,7 @@ export function createReadingPostProcessor(tracker: Tracker, getSettings: () => 
 
 		el.addClass("tracetime-section");
 		const overlay = el.createDiv({ cls: "tracetime-overlay" });
+		overlay.toggleClass("tracetime-compact", getSettings().compactLabels);
 		const elRect = el.getBoundingClientRect();
 
 		const children = Array.from(el.children).filter(
@@ -47,8 +52,9 @@ export function createReadingPostProcessor(tracker: Tracker, getSettings: () => 
 		for (const child of children) {
 			if (bi >= blocks.length) break;
 			const b = blocks[bi++];
-			const label = overlay.createDiv({ cls: "tracetime-overlay-label" });
-			label.textContent = formatTimestamp(b.modifiedAt, getSettings());
+			const label = overlay.createDiv({ cls: "tracetime-label" });
+			label.createSpan({ cls: "tracetime-label-dot" });
+			label.createSpan({ cls: "tracetime-label-text", text: formatTimestamp(b.modifiedAt, getSettings()) });
 			label.style.top = `${child.getBoundingClientRect().top - elRect.top}px`;
 		}
 	};

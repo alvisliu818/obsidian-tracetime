@@ -1,9 +1,25 @@
 import { App, Notice, PluginSettingTab, Setting, TextComponent } from "obsidian";
 import type TraceTimePlugin from "./main";
-import { DEFAULT_SETTINGS, formatTimestamp, TraceTimeSettings } from "./format";
+import { DEFAULT_SETTINGS, formatTimestamp, renderDateFormat, TraceTimeSettings } from "./format";
 
 export { DEFAULT_SETTINGS };
 export type { TraceTimeSettings };
+
+/** “完整日期格式”的预设项：下拉框里直接渲染成实际效果，不用看懂占位符 */
+const DATE_FORMAT_PRESETS = [
+	"YYYY-MM-DD HH:mm",
+	"YY-MM-DD HH:mm",
+	"MM-DD HH:mm",
+	"M月D日 HH:mm",
+	"M月D日",
+	"M月第W周 HH:mm",
+	"M月第W周",
+	"HH:mm MM/DD YY",
+	"HH:mm MM-DD",
+	"HH:mm M/D",
+	"HH:mm M月D日",
+];
+const CUSTOM_FORMAT = "__custom__";
 
 function parseNonNegativeInt(value: string, fallback: number): number {
 	const n = Number.parseInt(value.trim(), 10);
@@ -100,8 +116,58 @@ export class TraceTimeSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
+			.setName("标签字号")
+			.setDesc("时间标签的字号（px），默认比正文小一点")
+			.addSlider((slider) =>
+				slider
+					.setLimits(9, 20, 1)
+					.setValue(settings.labelFontSize)
+					.setDynamicTooltip()
+					.onChange(async (value) => {
+						settings.labelFontSize = value;
+						await this.plugin.saveSettings();
+						updatePreview();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("紧凑模式")
+			.setDesc("关闭「限制行宽」时，标签收起为右缘的小圆点，鼠标悬停才展开完整时间；开启「限制行宽」时始终完整显示")
+			.addToggle((toggle) =>
+				toggle.setValue(settings.compactLabels).onChange(async (value) => {
+					settings.compactLabels = value;
+					await this.plugin.saveSettings();
+				})
+			);
+
+		const formatNow = new Date();
+		const isCustomFormat = !DATE_FORMAT_PRESETS.includes(settings.dateFormat);
+
+		let customFormatSetting: Setting;
+		new Setting(containerEl)
 			.setName("完整日期格式")
-			.setDesc("以上档位都没命中时按此格式显示。支持占位符：YYYY MM DD HH mm")
+			.setDesc("以上档位都没命中时的兜底显示，选项就是实际效果")
+			.addDropdown((drop) => {
+				for (const p of DATE_FORMAT_PRESETS) drop.addOption(p, renderDateFormat(p, formatNow));
+				drop.addOption(CUSTOM_FORMAT, "自定义…");
+				drop.setValue(isCustomFormat ? CUSTOM_FORMAT : settings.dateFormat).onChange(async (value) => {
+					if (value === CUSTOM_FORMAT) {
+						customFormatSetting.settingEl.show();
+					} else {
+						customFormatSetting.settingEl.hide();
+						settings.dateFormat = value;
+						await this.plugin.saveSettings();
+						updatePreview();
+					}
+				});
+			});
+
+		customFormatSetting = new Setting(containerEl)
+			.setName("自定义格式")
+			.setDesc(
+				"占位符：YYYY=4位年 YY=2位年 MM=月 M=月不补零 DD=日 D=日不补零 HH=时 mm=分 W=当月第几周。" +
+					"例：M月D日 → 7月22日；M月第W周 → 7月第4周"
+			)
 			.addText((text) =>
 				text
 					.setPlaceholder(DEFAULT_SETTINGS.dateFormat)
@@ -112,6 +178,7 @@ export class TraceTimeSettingTab extends PluginSettingTab {
 						updatePreview();
 					})
 			);
+		if (!isCustomFormat) customFormatSetting.settingEl.hide();
 
 		new Setting(containerEl)
 			.setName("回滚时间戳")
@@ -189,10 +256,11 @@ export class TraceTimeSettingTab extends PluginSettingTab {
 		for (const [label, at] of samples) {
 			const row = el.createDiv({ cls: "tracetime-preview-row" });
 			row.createSpan({ cls: "tracetime-preview-sample", text: label });
-			row.createSpan({
+			const result = row.createSpan({
 				cls: "tracetime-preview-result",
 				text: formatTimestamp(Math.floor(at.getTime() / 60000), this.plugin.settings, now),
 			});
+			result.style.fontSize = `${this.plugin.settings.labelFontSize}px`;
 		}
 	}
 }

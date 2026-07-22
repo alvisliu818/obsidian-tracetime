@@ -128,7 +128,7 @@ export class Tracker {
 		};
 		this.states.set(file.path, st);
 		if (!record) this.markDirty(st); // 首次索引，建立初始记录
-		this.refreshEditors();
+		this.refreshViews();
 	}
 
 	ensureFile(path: string): void {
@@ -234,7 +234,7 @@ export class Tracker {
 				this.storage.save(file.path, blocksToRecord(file.path, merged.blocks));
 			}
 		}
-		this.refreshEditors();
+		this.refreshViews();
 	}
 
 	async onRename(file: TFile, oldPath: string): Promise<void> {
@@ -302,7 +302,7 @@ export class Tracker {
 			this.states.set(file.path, st);
 		}
 		this.markDirty(st);
-		this.refreshEditors();
+		this.refreshViews();
 		return true;
 	}
 
@@ -352,11 +352,13 @@ export class Tracker {
 		void this.flushDirty();
 	}
 
-	refreshEditors(): void {
+	/** 状态变化后刷新所有视图：编辑器标签重绘 + 阅读模式重渲染。 */
+	refreshViews(): void {
 		this.app.workspace.iterateAllLeaves((leaf) => {
 			if (leaf.view instanceof MarkdownView) {
 				const cm = (leaf.view.editor as { cm?: EditorView }).cm;
 				cm?.dispatch({ effects: tracetimeRefreshEffect.of(null) });
+				leaf.view.previewMode.rerender(true);
 			}
 		});
 	}

@@ -18,17 +18,15 @@ function fileOf(view: EditorView): TFile | null {
 
 interface Label {
 	text: string;
-	left: number;
+	/** 标签右缘的文档横坐标（钳制在可视区内） */
+	right: number;
 	top: number;
 }
 
 /**
  * 编辑模式显示：overlay 作为滚动容器（.cm-scroller）的子元素，
- * 标签使用文档坐标定位——滚动由浏览器原生完成，标签天然跟随内容，
- * 不存在屏幕坐标重算导致的错位/不跟随问题。
- *
- * 横坐标统一为“文档内容区右边缘”，与具体行盒宽度无关，
- * 任务列表等特殊行也不会破坏对齐。只渲染 visibleRanges 内的块。
+ * 标签使用文档坐标定位——滚动由浏览器原生完成，标签天然跟随内容。
+ * 横坐标锚在文档内容区右边缘并钳制在可视区内，只渲染 visibleRanges 内的块。
  */
 export function createEditorExtension(tracker: Tracker, getSettings: () => TraceTimeSettings) {
 	return ViewPlugin.fromClass(
@@ -69,13 +67,16 @@ export function createEditorExtension(tracker: Tracker, getSettings: () => Trace
 				// CM 更新周期内不允许直接读布局，必须走 measure 的 read/write 阶段
 				view.requestMeasure({
 					read: (v) => this.measureLabels(v),
-					write: (labels) => {
+					write: (res) => {
 						if (this.destroyed) return;
 						this.overlay.textContent = "";
-						for (const l of labels) {
-							const label = createDiv("tracetime-editor-label");
-							label.textContent = l.text;
-							label.style.left = `${l.left}px`;
+						this.overlay.toggleClass("tracetime-compact", getSettings().compactLabels);
+						this.overlay.toggleClass("tracetime-clamped", res.clamped);
+						for (const l of res.labels) {
+							const label = createDiv("tracetime-label");
+							label.createSpan("tracetime-label-dot");
+							label.createSpan({ cls: "tracetime-label-text", text: l.text });
+							label.style.left = `${l.right}px`;
 							label.style.top = `${l.top}px`;
 							this.overlay.appendChild(label);
 						}
@@ -83,17 +84,23 @@ export function createEditorExtension(tracker: Tracker, getSettings: () => Trace
 				});
 			}
 
-			private measureLabels(view: EditorView): Label[] {
+			private measureLabels(view: EditorView): { labels: Label[]; clamped: boolean } {
 				const file = fileOf(view);
 				const st = file ? tracker.getState(file.path) : undefined;
-				if (!st) return [];
+				if (!st) return { labels: [], clamped: false };
 
 				const doc = view.state.doc;
 				// 文档坐标系原点：contentDOM 在 scroller 内的偏移
 				// （inline title 等元素会把内容区往下推，offsetTop 自动覆盖）
 				const originTop = view.contentDOM.offsetTop;
-				// 统一基准：文档内容区右边缘（文档坐标，随行宽无关）
-				const left = view.contentDOM.offsetLeft + view.contentDOM.offsetWidth;
+				const contentRight = view.contentDOM.offsetLeft + view.contentDOM.offsetWidth;
+				const viewportRight = view.scrollDOM.scrollLeft + view.scrollDOM.clientWidth - 8;
+				// 与阅读模式同一套规则：未开“限制行宽”一律锚在可视区右缘、
+				// clamped 右对齐（向左展开）；开了则锚在内容区右边缘、向右伸进
+				// 页边距，仅窗口过窄内容超出可视区时才退回右缘锚定
+				const readable = view.dom.closest(".markdown-source-view.is-readable-line-width") !== null;
+				const clamped = !readable || contentRight > viewportRight;
+				const right = clamped ? viewportRight : contentRight;
 
 				const labels: Label[] = [];
 				for (const vr of view.visibleRanges) {
@@ -101,12 +108,12 @@ export function createEditorExtension(tracker: Tracker, getSettings: () => Trace
 						const block = view.lineBlockAt(Math.min(b.from, doc.length));
 						labels.push({
 							text: formatTimestamp(b.modifiedAt, getSettings()),
-							left,
+							right,
 							top: originTop + block.top + block.height / 2,
 						});
 					}
 				}
-				return labels;
+				return { labels, clamped };
 			}
 		}
 	);
