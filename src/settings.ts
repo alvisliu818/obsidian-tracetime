@@ -122,11 +122,25 @@ export class TraceTimeSettingTab extends PluginSettingTab {
 				slider
 					.setLimits(9, 20, 1)
 					.setValue(settings.labelFontSize)
-					.setDynamicTooltip()
 					.onChange(async (value) => {
 						settings.labelFontSize = value;
 						await this.plugin.saveSettings();
 						updatePreview();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("标签垂直位置")
+			.setDesc("时间标签显示在块的哪个高度：首行/末行是该行的行内居中，中间是整个块的垂直居中")
+			.addDropdown((drop) =>
+				drop
+					.addOption("start", "块首行")
+					.addOption("middle", "块中间")
+					.addOption("end", "块末行")
+					.setValue(settings.labelVertical)
+					.onChange(async (value) => {
+						settings.labelVertical = value as TraceTimeSettings["labelVertical"];
+						await this.plugin.saveSettings();
 					})
 			);
 

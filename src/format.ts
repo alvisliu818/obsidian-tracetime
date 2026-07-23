@@ -19,6 +19,8 @@ export interface TraceTimeSettings {
 	labelFontSize: number;
 	/** 紧凑模式：关闭限制行宽时标签收起为圆点，悬停展开 */
 	compactLabels: boolean;
+	/** 标签垂直位置：块首行 / 块中间 / 块末行（首末行指该行的行内居中） */
+	labelVertical: "start" | "middle" | "end";
 }
 
 export const DEFAULT_SETTINGS: TraceTimeSettings = {
@@ -32,6 +34,7 @@ export const DEFAULT_SETTINGS: TraceTimeSettings = {
 	dateFormat: "YYYY-MM-DD HH:mm",
 	labelFontSize: 12,
 	compactLabels: true,
+	labelVertical: "middle",
 };
 
 export function nowMinutes(): number {

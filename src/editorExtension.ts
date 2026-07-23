@@ -103,13 +103,25 @@ export function createEditorExtension(tracker: Tracker, getSettings: () => Trace
 				const right = clamped ? viewportRight : contentRight;
 
 				const labels: Label[] = [];
+				const vertical = getSettings().labelVertical;
 				for (const vr of view.visibleRanges) {
 					for (const b of st.index.queryOverlapping(vr.from, vr.to)) {
-						const block = view.lineBlockAt(Math.min(b.from, doc.length));
+						const firstLine = view.lineBlockAt(Math.min(b.from, doc.length));
+						let top: number;
+						if (vertical === "start") {
+							top = firstLine.top + firstLine.height / 2;
+						} else {
+							// 块末行（b.to 为开区间，取最后一个字符所在行）
+							const lastLine = view.lineBlockAt(Math.max(b.from, Math.min(b.to - 1, doc.length)));
+							top =
+								vertical === "end"
+									? lastLine.top + lastLine.height / 2
+									: (firstLine.top + lastLine.top + lastLine.height) / 2;
+						}
 						labels.push({
 							text: formatTimestamp(b.modifiedAt, getSettings()),
 							right,
-							top: originTop + block.top + block.height / 2,
+							top: originTop + top,
 						});
 					}
 				}

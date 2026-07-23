@@ -49,13 +49,24 @@ export function createReadingPostProcessor(tracker: Tracker, getSettings: () => 
 			(c): c is HTMLElement => c.instanceOf(HTMLElement) && c !== overlay
 		);
 		let bi = 0;
+		const vertical = getSettings().labelVertical;
 		for (const child of children) {
 			if (bi >= blocks.length) break;
 			const b = blocks[bi++];
 			const label = overlay.createDiv({ cls: "tracetime-label" });
 			label.createSpan({ cls: "tracetime-label-dot" });
 			label.createSpan({ cls: "tracetime-label-text", text: formatTimestamp(b.modifiedAt, getSettings()) });
-			label.style.top = `${child.getBoundingClientRect().top - elRect.top}px`;
+			// 垂直锚点：首行/末行取该行行内居中（行高近似），中间取整个块的垂直居中
+			const r = child.getBoundingClientRect();
+			const lineHeight = parseFloat(getComputedStyle(child).lineHeight) || 18;
+			const relTop = r.top - elRect.top;
+			const top =
+				vertical === "middle"
+					? relTop + r.height / 2
+					: vertical === "end"
+						? relTop + r.height - lineHeight / 2
+						: relTop + lineHeight / 2;
+			label.style.top = `${top}px`;
 		}
 	};
 }
