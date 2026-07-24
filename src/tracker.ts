@@ -3,14 +3,13 @@ import type { ChangeSet, Text } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { makeBlockId, parseBlocks } from "./blocks";
 import { BlockIndex, BlockTimes, reconcileBlocks, seedHistory } from "./blockIndex";
+import { applyEditToIndex } from "./editApply";
 import { blocksToRecord, recordToBlocks } from "./record";
 import { Storage } from "./storage";
 import { nowMinutes } from "./format";
 import { tracetimeRefreshEffect } from "./editorExtension";
 
 const FLUSH_DELAY_MS = 2000; // 停止输入 2 秒后落盘
-const MAX_WINDOW_BYTES = 32 * 1024; // 增量窗口最大扩展
-const FENCE_SCAN_LINES = 2000; // 围栏状态回溯扫描上限
 
 export interface FileState {
 	path: string;
@@ -23,62 +22,6 @@ export interface FileState {
 	editCounter: number; // 已处理的内部 transaction 数
 	handledModifyCounter: number; // 上次 modify 事件时已见的 counter
 	dirty: boolean;
-}
-
-function isFenceLine(text: string): boolean {
-	const t = text.trimStart();
-	return t.startsWith("```") || t.startsWith("~~~");
-}
-
-/**
- * 编辑窗口扩展：从变更范围向前后扩到空行/结构边界；
- * 处于代码围栏内则扩到完整围栏；覆盖 frontmatter 则扩到完整 frontmatter。
- */
-function expandEditWindow(doc: Text, from: number, to: number): { from: number; to: number } {
-	let startLine = doc.lineAt(from).number;
-	let endLine = doc.lineAt(to).number;
-
-	const sizeOk = () => doc.line(endLine).to - doc.line(startLine).from < MAX_WINDOW_BYTES;
-
-	while (startLine > 1 && doc.line(startLine - 1).text.trim() !== "" && sizeOk()) startLine--;
-	while (endLine < doc.lines && doc.line(endLine + 1).text.trim() !== "" && sizeOk()) endLine++;
-
-	// 窗口起点处于围栏内：扩到完整代码块
-	let inside = 0;
-	const scanFrom = Math.max(1, startLine - FENCE_SCAN_LINES);
-	for (let l = scanFrom; l < startLine; l++) {
-		if (isFenceLine(doc.line(l).text)) inside ^= 1;
-	}
-	if (inside === 1) {
-		let l = startLine - 1;
-		while (l >= scanFrom && !isFenceLine(doc.line(l).text)) l--;
-		if (l >= 1) startLine = l;
-		let e = endLine;
-		while (e < doc.lines && !isFenceLine(doc.line(e).text)) e++;
-		endLine = Math.min(e, doc.lines);
-	} else {
-		// 窗口内部围栏不平衡：向后扩到闭合
-		let balance = 0;
-		for (let l = startLine; l <= endLine; l++) {
-			if (isFenceLine(doc.line(l).text)) balance ^= 1;
-		}
-		while (balance === 1 && endLine < doc.lines) {
-			endLine++;
-			if (isFenceLine(doc.line(endLine).text)) balance ^= 1;
-		}
-	}
-
-	// frontmatter：重叠即扩到完整 frontmatter
-	if (doc.line(1).text.trim() === "---") {
-		let fm = 2;
-		while (fm <= doc.lines && doc.line(fm).text.trim() !== "---") fm++;
-		if (fm <= doc.lines && startLine <= fm) {
-			startLine = 1;
-			endLine = Math.max(endLine, fm);
-		}
-	}
-
-	return { from: doc.line(startLine).from, to: doc.line(endLine).to };
 }
 
 export class Tracker {
@@ -152,50 +95,20 @@ export class Tracker {
 	}
 
 	/**
-	 * 编辑器内增量更新路径（每次按键走这里，目标 P95 < 2ms）：
-	 * ChangeSet → 扩展窗口 → 只重解析窗口 → 替换索引区间 → 标记脏块。
+	 * 编辑器内增量更新入口（每次按键走这里）：纯计算在 editApply.ts。
+	 * editCounter 在成功之后才自增——若中途抛异常，modify 事件会走
+	 * 全文恢复兜底，而不是把损坏的索引当成“已处理的内部编辑”。
 	 */
-	applyEdit(path: string, doc: Text, changes: ChangeSet): void {
+	applyEdit(path: string, startDoc: Text, doc: Text, changes: ChangeSet): void {
 		const st = this.states.get(path);
 		if (!st) {
 			this.ensureFile(path);
 			return;
 		}
-		st.editCounter++;
-
-		let newFrom = Number.MAX_SAFE_INTEGER;
-		let newTo = 0;
-		changes.iterChanges((_fA, _tA, fB, tB) => {
-			if (fB < newFrom) newFrom = fB;
-			if (tB > newTo) newTo = tB;
-		});
-		if (newFrom > newTo) return;
-
-		let win = expandEditWindow(doc, newFrom, newTo);
-		let oldFrom = changes.mapPos(win.from, -1);
-		let oldTo = changes.mapPos(win.to, -1);
-
-		// 吞并部分重叠的块，保证索引一致性
-		const overlapped = st.index.queryOverlapping(oldFrom, oldTo);
-		if (overlapped.length > 0) {
-			const first = overlapped[0];
-			const last = overlapped[overlapped.length - 1];
-			if (first.from < oldFrom) oldFrom = first.from;
-			if (last.to > oldTo) oldTo = last.to;
-			win = { from: changes.mapPos(oldFrom, 1), to: changes.mapPos(oldTo, 1) };
-		}
-
-		const nowMin = nowMinutes();
-		const parsed = parseBlocks(doc.sliceString(win.from, win.to), win.from, nowMin, makeBlockId);
-		const removed = st.index.queryOverlapping(oldFrom, oldTo);
-		const merged = reconcileBlocks(removed, parsed, nowMin, st.history);
-
-		const delta = win.to - win.from - (oldTo - oldFrom);
-		st.index.replaceWindow(oldFrom, oldTo, merged.blocks, delta);
+		const changed = applyEditToIndex(st, startDoc, doc, changes, nowMinutes());
 		st.latestDoc = doc;
-		seedHistory(st.history, merged.blocks);
-
-		if (merged.changed) this.markDirty(st);
+		st.editCounter++;
+		if (changed) this.markDirty(st);
 	}
 
 	/**

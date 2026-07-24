@@ -216,6 +216,71 @@ check("history keeps newest", stack.get(BigInt(HISTORY_CAP + 99))?.modifiedAt ==
 // 被 LRU 刷到栈顶的条目在容量逐出中存活（0..9 刚被刷新过）
 check("history LRU refresh survives eviction", stack.has(5n));
 
+// --- applyEditToIndex：真实 CM ChangeSet 走增量更新路径 ---
+// 回归：编辑发生在文档末尾时，旧代码用正方向 mapPos 映回旧坐标会抛
+// RangeError（changeset 越界），索引损坏、标签全消失
+import { EditorState } from "@codemirror/state";
+import { applyEditToIndex } from "../src/editApply";
+
+const EDIT_SAMPLE = [
+	"# 标题",
+	"",
+	"第一段文字，随便写点什么。",
+	"",
+	"第二段文字，也很普通。",
+	"",
+	"第三段，文档的结尾。",
+].join("\n");
+
+function simulateEdits(name: string, edits: { from: number; to?: number; insert: string }[]) {
+	const simBlocks = parseBlocks(EDIT_SAMPLE, 0, 100, makeBlockId);
+	const simHistory = new Map<bigint, BlockTimes>();
+	seedHistory(simHistory, simBlocks);
+	const sim = { index: new BlockIndex(simBlocks), history: simHistory };
+
+	let state = EditorState.create({ doc: EDIT_SAMPLE });
+	let now = 200;
+	let threw = false;
+	for (const e of edits) {
+		const tr = state.update({ changes: { from: e.from, to: e.to ?? e.from, insert: e.insert } });
+		state = tr.state;
+		try {
+			applyEditToIndex(sim, tr.startState.doc, tr.state.doc, tr.changes, now);
+		} catch {
+			threw = true;
+		}
+		now += 1;
+	}
+	check(`${name}: no throw`, !threw);
+
+	const doc = state.doc;
+	const bs = sim.index.blocks;
+	let sound = bs.length > 0;
+	for (let i = 0; i < bs.length; i++) {
+		if (bs[i].from < 0 || bs[i].to > doc.length || bs[i].from >= bs[i].to) sound = false;
+		if (i > 0 && bs[i].from < bs[i - 1].to) sound = false;
+	}
+	check(`${name}: index sound`, sound);
+	// 可视范围查询（measureLabels 同款）必须查得到块
+	check(`${name}: queryOverlapping hits`, sim.index.queryOverlapping(0, doc.length).length === bs.length);
+}
+
+const ep2 = EDIT_SAMPLE.indexOf("第二段");
+simulateEdits("edit: middle of paragraph", [{ from: ep2 + 3, insert: "新插入的" }]);
+simulateEdits("edit: new line after paragraph", [
+	{ from: ep2 + "第二段文字，也很普通。".length, insert: "\n新加的一行" },
+]);
+simulateEdits("edit: typing burst", [
+	{ from: ep2 + 3, insert: "A" },
+	{ from: ep2 + 4, insert: "B" },
+	{ from: ep2 + 5, insert: "C" },
+]);
+simulateEdits("edit: append at doc end", [{ from: EDIT_SAMPLE.length, insert: "\n\n末尾新行" }]);
+simulateEdits("edit: last line content", [
+	{ from: EDIT_SAMPLE.indexOf("结尾"), insert: "（改过）" },
+]);
+simulateEdits("edit: delete text", [{ from: ep2, to: ep2 + 4, insert: "" }]);
+
 if (failures > 0) {
 	console.error(`${failures} failure(s)`);
 	process.exit(1);

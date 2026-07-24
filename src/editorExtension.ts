@@ -44,9 +44,15 @@ export function createEditorExtension(tracker: Tracker, getSettings: () => Trace
 				if (u.docChanged) {
 					const file = fileOf(u.view);
 					if (file) {
-						// 逐 transaction 顺序应用，保证多 transaction 时索引连续一致
+						// 逐 transaction 顺序应用，保证多 transaction 时索引连续一致；
+						// 单个失败不炸穿 CM 更新周期，由后续 modify 事件走全文恢复
 						for (const tr of u.transactions) {
-							if (tr.docChanged) tracker.applyEdit(file.path, tr.state.doc, tr.changes);
+							if (!tr.docChanged) continue;
+							try {
+								tracker.applyEdit(file.path, tr.startState.doc, tr.state.doc, tr.changes);
+							} catch (e) {
+								console.error("TraceTime: applyEdit failed", e);
+							}
 						}
 					}
 				}
