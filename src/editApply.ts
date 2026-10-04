@@ -1,5 +1,5 @@
 import type { ChangeSet, Text } from "@codemirror/state";
-import { makeBlockId, parseBlocks } from "./blocks";
+import { makeBlockId, parseBlocks, LIST_RE } from "./blocks";
 import { BlockIndex, BlockTimes, reconcileBlocks, seedHistory } from "./blockIndex";
 
 const MAX_WINDOW_BYTES = 32 * 1024; // 增量窗口最大扩展
@@ -20,8 +20,12 @@ export function expandEditWindow(doc: Text, from: number, to: number): { from: n
 
 	const sizeOk = () => doc.line(endLine).to - doc.line(startLine).from < MAX_WINDOW_BYTES;
 
-	while (startLine > 1 && doc.line(startLine - 1).text.trim() !== "" && sizeOk()) startLine--;
-	while (endLine < doc.lines && doc.line(endLine + 1).text.trim() !== "" && sizeOk()) endLine++;
+	// 大纲列表（Logseq md）没有空行分隔：列表行同样是块边界，
+	// 否则无空行文档的每次编辑都会把窗口扩到整个文件。
+	const atBoundary = (text: string) => text.trim() === "" || LIST_RE.test(text);
+
+	while (startLine > 1 && !atBoundary(doc.line(startLine - 1).text) && sizeOk()) startLine--;
+	while (endLine < doc.lines && !atBoundary(doc.line(endLine + 1).text) && sizeOk()) endLine++;
 
 	// 窗口起点处于围栏内：扩到完整代码块
 	let inside = 0;

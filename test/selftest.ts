@@ -52,7 +52,8 @@ const md = [
 
 const blocks = parseBlocks(md, 0, 1000, makeBlockId);
 const types = blocks.map((b) => b.type);
-check("block count = 8", blocks.length === 8);
+// 大纲粒度：- item 1 / - item 2 各自成块（无需空行分隔），列表共 2 块
+check("block count = 9", blocks.length === 9);
 check(
 	"type sequence",
 	types[0] === BlockType.Frontmatter &&
@@ -60,9 +61,10 @@ check(
 		types[2] === BlockType.Paragraph &&
 		types[3] === BlockType.Code &&
 		types[4] === BlockType.List &&
-		types[5] === BlockType.Table &&
-		types[6] === BlockType.Callout &&
-		types[7] === BlockType.Paragraph
+		types[5] === BlockType.List &&
+		types[6] === BlockType.Table &&
+		types[7] === BlockType.Callout &&
+		types[8] === BlockType.Paragraph
 );
 check("offsets cover text", blocks[0].from === 0 && blocks[blocks.length - 1].to === md.length);
 check("code block spans blank line", md.slice(blocks[3].from, blocks[3].to).includes("const b = 2;"));
@@ -70,6 +72,34 @@ check(
 	"no overlapping blocks",
 	blocks.every((b, i) => i === 0 || b.from >= blocks[i - 1].to)
 );
+
+// --- 大纲列表（Logseq md 粒度）：列表行即块，无需空行 ---
+const outline = [
+	"- TODO parent item",
+	"\t- child item",
+	"\t\t- grand child",
+	"- second top item",
+	"\tsoft line under second",
+	"- third item",
+].join("\n");
+const outlineBlocks = parseBlocks(outline, 0, 1000, makeBlockId);
+// 6 行 → 5 块：软行 "\tsoft line under second" 归属 "- second top item"
+check("outline: 5 blocks without blank lines", outlineBlocks.length === 5 && outlineBlocks.every((b) => b.type === BlockType.List));
+check(
+	"outline: non-overlapping and ordered",
+	outlineBlocks.every((b, i) => i === 0 || b.from >= outlineBlocks[i - 1].to)
+);
+check("outline: child item is its own block", outline.slice(outlineBlocks[1].from, outlineBlocks[1].to).trim() === "- child item");
+check("outline: soft line stays with its item", outline.slice(outlineBlocks[3].from, outlineBlocks[3].to).includes("soft line under second"));
+
+// 项内缩进围栏并入该项；后续列表项另起块
+const itemCode = "- item with code\n\t```js\n\tconst a = 1;\n\t```\n- next item";
+const itemCodeBlocks = parseBlocks(itemCode, 0, 1000, makeBlockId);
+check("outline: indented fence belongs to its item", itemCodeBlocks.length === 2 && itemCode.slice(itemCodeBlocks[0].from, itemCodeBlocks[0].to).includes("const a = 1;"));
+
+// 段落不吞掉后续列表行
+const paraList = parseBlocks("plain paragraph\n- list after paragraph", 0, 1000, makeBlockId);
+check("paragraph does not swallow list line", paraList.length === 2 && paraList[0].type === BlockType.Paragraph && paraList[1].type === BlockType.List);
 
 // --- reconcile：修改中间块保留 id/createdAt，更新 modifiedAt ---
 const edited = md.replace("paragraph line 2.", "paragraph line 2 CHANGED.");
@@ -88,8 +118,8 @@ const last = "Last paragraph.";
 const moved = md.replace(para, "TMP").replace(last, para).replace("TMP", last);
 const blocks3 = parseBlocks(moved, 0, 3000, makeBlockId);
 const merged3 = reconcileBlocks(blocks, blocks3, 3000);
-const movedPara = merged3.blocks.find((b) => b.hash === blocks[7].hash);
-check("moved block keeps id via unique hash", movedPara !== undefined && movedPara.id === blocks[7].id);
+const movedPara = merged3.blocks.find((b) => b.hash === blocks[8].hash);
+check("moved block keeps id via unique hash", movedPara !== undefined && movedPara.id === blocks[8].id);
 
 // --- BlockIndex.replaceWindow：窗口替换 + 后续块 delta 平移 ---
 const idx = new BlockIndex(blocks.map((b) => ({ ...b })));
@@ -232,13 +262,13 @@ const EDIT_SAMPLE = [
 	"第三段，文档的结尾。",
 ].join("\n");
 
-function simulateEdits(name: string, edits: { from: number; to?: number; insert: string }[]) {
-	const simBlocks = parseBlocks(EDIT_SAMPLE, 0, 100, makeBlockId);
+function simulateEdits(name: string, edits: { from: number; to?: number; insert: string }[], sample = EDIT_SAMPLE) {
+	const simBlocks = parseBlocks(sample, 0, 100, makeBlockId);
 	const simHistory = new Map<bigint, BlockTimes>();
 	seedHistory(simHistory, simBlocks);
 	const sim = { index: new BlockIndex(simBlocks), history: simHistory };
 
-	let state = EditorState.create({ doc: EDIT_SAMPLE });
+	let state = EditorState.create({ doc: sample });
 	let now = 200;
 	let threw = false;
 	for (const e of edits) {
@@ -280,6 +310,23 @@ simulateEdits("edit: last line content", [
 	{ from: EDIT_SAMPLE.indexOf("结尾"), insert: "（改过）" },
 ]);
 simulateEdits("edit: delete text", [{ from: ep2, to: ep2 + 4, insert: "" }]);
+
+// --- 大纲文档（无空行分隔）：增量窗口必须停在列表行边界 ---
+const OUTLINE_SAMPLE = ["- 第一个块", "- 第二个块", "- 第三个块", "- 第四个块"].join("\n");
+const ob2 = OUTLINE_SAMPLE.indexOf("第二个块");
+simulateEdits("outline: middle item edit", [{ from: ob2 + 2, insert: "改" }], OUTLINE_SAMPLE);
+simulateEdits("outline: typing burst in middle item", [
+	{ from: ob2 + 2, insert: "A" },
+	{ from: ob2 + 3, insert: "B" },
+], OUTLINE_SAMPLE);
+simulateEdits("outline: append new item at end", [
+	{ from: OUTLINE_SAMPLE.length, insert: "\n- 第五个块" },
+], OUTLINE_SAMPLE);
+// 大纲编辑后，每个条目仍是独立块（粒度不塌缩）
+{
+	const simBlocks = parseBlocks(OUTLINE_SAMPLE, 0, 100, makeBlockId);
+	check("outline: four separate blocks", simBlocks.length === 4);
+}
 
 if (failures > 0) {
 	console.error(`${failures} failure(s)`);

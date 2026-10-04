@@ -57,3 +57,15 @@ TraceTime 是一个 Obsidian 插件：为笔记中的**每个块**（段落、�
 ## License
 
 MIT
+
+## Outline lists (Logseq md granularity)
+
+List items are tracked as individual blocks: every `- ` / `* ` / `1.` line
+starts its own block, so an outline needs **no blank lines** between items
+(upstream merged consecutive list lines into one block until a blank line).
+Indented soft lines and indented code/quotes belong to the item above them.
+
+Note for existing installs: records written by 0.1.x used the merged-block
+granularity; on first open after upgrading, unchanged items keep their
+timestamps via hash reconciliation where possible, otherwise they are re-seeded
+from the file's mtime.

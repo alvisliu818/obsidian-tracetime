@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-tracetime",
-	"version": "0.1.5",
+	"version": "0.2.0",
 	"description": "Time tracking plugin for Obsidian.",
 	"private": true,
 	"main": "build/main.js",

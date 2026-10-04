@@ -34,7 +34,8 @@ export function makeBlockId(): bigint {
 const FENCE_RE = /^(```|~~~)/;
 const HEADING_RE = /^#{1,6}\s/;
 const HR_RE = /^\s{0,3}(?:-{3,}|\*{3,}|_{3,})\s*$/;
-const LIST_RE = /^\s{0,3}(?:[-*+]|\d{1,9}[.)])\s/;
+/** 列表行（大纲块边界）：标记前允许至多 3 个空白字符（含 Tab）。 */
+export const LIST_RE = /^\s{0,3}(?:[-*+]|\d{1,9}[.)])\s/;
 const CALLOUT_RE = /^>\s*\[![^\]]+\]/;
 
 function classify(line: string): BlockType {
@@ -124,11 +125,22 @@ export function parseBlocks(
 			i++;
 			if (type === BlockType.Table) {
 				while (i < lines.length && lines[i].trimStart().startsWith("|")) i++;
+			} else if (type === BlockType.List) {
+				// 大纲列表（Logseq md 粒度）：每个列表行即一个块，项间不需要空行。
+				// 软行与缩进内容（缩进围栏、引用、更深段落）归属当前项，直到
+				// 空行 / 下一列表行（任意缩进，LIST_RE 覆盖至 3 空格 + 标记）/ 顶格结构行。
+				while (i < lines.length && lines[i].trim() !== "" && !LIST_RE.test(lines[i])) {
+					const t = lines[i].trimStart();
+					const atColumn0 = !/^\s/.test(lines[i]);
+					if (atColumn0 && (FENCE_RE.test(t) || HEADING_RE.test(t) || HR_RE.test(lines[i]) || t.startsWith(">"))) break;
+					i++;
+				}
 			} else {
-				// 段落/列表/引用/Callout：延续到空行，但不让段落吞掉新结构
+				// 段落/引用/Callout：延续到空行，但不让段落吞掉新结构
+				// （列表行同样另起块——大纲列表无需空行分隔）
 				while (i < lines.length && lines[i].trim() !== "") {
 					const t = lines[i].trimStart();
-					if (type === BlockType.Paragraph && (FENCE_RE.test(t) || HEADING_RE.test(t) || HR_RE.test(lines[i]))) break;
+					if (type === BlockType.Paragraph && (FENCE_RE.test(t) || HEADING_RE.test(t) || HR_RE.test(lines[i]) || LIST_RE.test(lines[i]))) break;
 					i++;
 				}
 			}
